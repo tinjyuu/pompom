@@ -62,6 +62,9 @@ APIキーは`~/.config/pompom/settings.json`に0600で保存し、画面へのAP
 
 ## 開発・検証
 
+ソースをGitでcloneする場合はGit LFSが必要です。音声素材は公開Hugging Face Spaceから取得します。
+Reachyのダッシュボードからのインストールは、SDKが音声素材も取得します。
+
 ```sh
 python -m pip install -e '.[dev]'
 python -m pytest -q
