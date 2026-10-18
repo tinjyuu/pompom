@@ -1,7 +1,7 @@
 ---
 title: PomPom
 emoji: 🍅
-colorFrom: orange
+colorFrom: yellow
 colorTo: pink
 sdk: static
 app_file: index.html
