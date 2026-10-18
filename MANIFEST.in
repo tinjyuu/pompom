@@ -1,0 +1,7 @@
+include README.md pyproject.toml index.html style.css
+graft pompom
+prune tests
+prune scripts
+prune .github
+prune .venv
+global-exclude __pycache__ *.py[cod] .DS_Store
