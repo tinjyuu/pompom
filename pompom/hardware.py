@@ -16,6 +16,7 @@ EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
 FEAR_MOVE = "fear1"
 HAPPY_MOVE = "cheerful1"
 DANCE_MOVE = "dance1"
+IDLE_MOVES = ("curious1", "attentive1", "inquiring1")
 REMINDER_SOUNDS = tuple(
     Path(__file__).parent / "assets" / name
     for name in ("reminder-1.wav", "reminder-2.wav")
@@ -31,6 +32,12 @@ class ReachyHardware:
         self.happy = None
         self.dance = None
         self.audio_enabled = True
+        self.idle_behavior_enabled = True
+        self.idle_moves = {}
+        self.next_idle_reaction = self.clock() + random.uniform(12, 25)
+        self.idle_reaction_allowed = False
+        self.capture_in = None
+        self.test_dance_until = 0.0
         self.last_reaction = None
         self.emotion = None
         self.returning = None
@@ -57,7 +64,23 @@ class ReachyHardware:
             actions.append(HAPPY_MOVE)
         if self.dance is not None:
             actions.append(DANCE_MOVE)
-        return {"camera": self.mini.media.camera is not None, "actions": actions}
+        return {
+            "camera": self.mini.media.camera is not None,
+            "actions": actions,
+            "emotion_sounds": {
+                name: bool(
+                    move is not None
+                    and move.sound_path
+                    and Path(move.sound_path).is_file()
+                )
+                for name, move in (
+                    (FEAR_MOVE, self.fear),
+                    (HAPPY_MOVE, self.happy),
+                    (DANCE_MOVE, self.dance),
+                )
+            },
+            "idle_reactions": list(self.idle_moves),
+        }
 
     def _idle_baseline(self):
         self.idle_head = self.mini.get_current_head_pose().copy()
@@ -94,9 +117,49 @@ class ReachyHardware:
             except Exception:
                 setattr(self, attr, None)
 
+        for name in IDLE_MOVES:
+            try:
+                move = moves.get(name)
+                if move.sound_path is not None and Path(move.sound_path).is_file():
+                    self.idle_moves[name] = move
+            except Exception:
+                pass
+
     def configure(self, settings):
         self.idle_enabled = settings.motion_enabled
         self.audio_enabled = settings.audio_enabled
+        self.idle_behavior_enabled = settings.idle_behavior_enabled
+
+    def set_idle_context(self, allowed, capture_in=None):
+        self.idle_reaction_allowed = allowed
+        self.capture_in = capture_in
+        if not allowed:
+            self.next_idle_reaction = self.clock() + random.uniform(12, 25)
+
+    def _idle_reaction_step(self):
+        if (
+            not self.idle_reaction_allowed
+            or not self.idle_enabled
+            or not self.idle_behavior_enabled
+            or not self.idle_moves
+            or self.clock() < self.next_idle_reaction
+            or self.emotion is not None
+            or self.returning is not None
+            or self.audio_until
+            or self.queued_speech is not None
+        ):
+            return []
+        candidates = [
+            (name, move)
+            for name, move in self.idle_moves.items()
+            if self.capture_in is None or self.capture_in > move.duration + 3
+        ]
+        if not candidates:
+            return []  # Keep the reference pose settled before the next camera sample.
+        name, move = random.choice(candidates)
+        self.next_idle_reaction = self.clock() + random.uniform(15, 35)
+        self._start_emotion(move, name, self.audio_enabled)
+        return [{"action": name, "status": "started"}]
 
     def is_dancing(self):
         return self.emotion is not None and self.emotion.get("kind") == DANCE_MOVE
@@ -119,6 +182,8 @@ class ReachyHardware:
     def set_focus_progress(self, seconds):
         # The caller maps each clear camera observation to a ten-point level.
         self.target_energy = min(1.0, max(0.0, math.floor(seconds / 10) / 3))
+        if self.is_dancing() and self.clock() < self.test_dance_until:
+            return []
         if seconds < 10 and self.is_dancing():
             self.cancel()
             return [{"action": DANCE_MOVE, "status": "cancelled"}]
@@ -131,6 +196,9 @@ class ReachyHardware:
             and not self.audio_until
             and self.queued_speech is None
         ):
+            idle_action = self._idle_reaction_step()
+            if idle_action:
+                return idle_action
             self._start_emotion(self.dance, DANCE_MOVE, self.audio_enabled)
             return [{"action": DANCE_MOVE, "status": "started"}]
         return []
@@ -193,6 +261,13 @@ class ReachyHardware:
             except Exception:
                 results.append({"action": "reminder", "status": "failed"})
         return results
+
+    def test_dance(self, settings):
+        if self.dance is None:
+            raise ValueError("ダンスを読み込めませんでした。")
+        self._start_emotion(self.dance, DANCE_MOVE, settings.audio_enabled)
+        self.test_dance_until = self.clock() + self.dance.duration + 1.8
+        return [{"action": DANCE_MOVE, "status": "started"}]
 
     def celebrate(self, settings):
         if self.happy is None:
@@ -289,8 +364,10 @@ class ReachyHardware:
             _, presets = self.queued_speech
             self.queued_speech = None
             self._play_reminder(presets)
+        return self._idle_reaction_step()
 
     def cancel(self):
+        self.test_dance_until = 0.0
         self.queued_speech = None
         had_emotion = self.emotion is not None
         self.emotion = None

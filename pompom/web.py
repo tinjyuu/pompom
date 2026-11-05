@@ -96,3 +96,7 @@ def attach_routes(app, get_runtime):
     @app.post("/api/test-notification")
     def test_notification():
         return invoke(lambda: runtime().test_notification())
+
+    @app.post("/api/test-dance")
+    def test_dance():
+        return invoke(lambda: runtime().test_dance())

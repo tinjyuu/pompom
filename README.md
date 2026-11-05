@@ -52,6 +52,10 @@ The control screen also shows a cumulative USD estimate, including sub-cent amou
 
 Counters persist across sessions and app restarts in `~/.config/pompom/usage.json` (mode `0600`). The file contains counters and a start timestamp, with no images, prompts, conditions, or API keys. These are local app totals from version 0.2.0 onward, not account-wide usage or billing amounts. A storage warning is displayed if totals cannot be persisted.
 
+## Creature-like idle behavior
+
+Small head and antenna movements remain active. With **気まぐれな仕草と鳴き声** enabled, PomPom also picks a short official `curious1`, `attentive1`, or `inquiring1` motion together with its original nonverbal sound. Timing varies (initially 12–25 seconds, then 15–35 seconds), while idle or between healthy session observations. It yields to detection reactions, speech, pauses, errors, and upcoming camera captures. The master audio switch mutes these sounds; the voice-reminder switch controls spoken reminders independently. There is no additional capture, API request, or synthesized narration. Official `fear1` and `dance1` keep their original sounds.
+
 ## How it behaves
 
 - When a sampled image clearly shows all selected conditions are absent, PomPom performs the official `dance1` motion.

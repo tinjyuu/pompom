@@ -174,6 +174,18 @@ class Runtime:
                 raise ValueError("処理中です。少し待って再試行してください。")
             return self.hardware.capture()
 
+    def test_dance(self):
+        with self.lock:
+            self._tick()
+            if self.closed or self.session.state in ("starting", "running", "resuming"):
+                raise ValueError(
+                    "ダンステストはセッションを一時停止してから行ってください。"
+                )
+            self._cancel_actions()
+            actions = self.hardware.test_dance(self.session.settings)
+            self.session.log("dance_test", actions=actions)
+            return self.snapshot()
+
     def event_image(self, event_id):
         with self.lock:
             return self.session.event_images.get(event_id)
@@ -359,19 +371,35 @@ class Runtime:
             # Consume fresh results before sending the next motion target, so a phone
             # response replaces the dance immediately instead of advancing it one more tick.
             try:
+                if hasattr(self.hardware, "set_idle_context"):
+                    self.hardware.set_idle_context(
+                        s.state == "idle"
+                        or (
+                            s.state == "running"
+                            and not s.error
+                            and self.pending is None
+                        ),
+                        max(0, self.next_capture - s.clock())
+                        if s.state == "running"
+                        else None,
+                    )
                 if hasattr(self.hardware, "set_focus_progress"):
                     actions = self.hardware.set_focus_progress(
                         s.clear_observations * 10 if s.state == "running" else 0
                     )
                     if actions:
                         s.log(
-                            "focus_motion",
+                            "focus_motion"
+                            if any(a["action"] == "dance1" for a in actions)
+                            else "idle_reaction",
                             actions=actions,
                             image=self.last_observation_image
                             if s.last_focus_sample is not None
                             else None,
                         )
-                self.hardware.step()
+                idle_actions = self.hardware.step()
+                if idle_actions:
+                    s.log("idle_reaction", actions=idle_actions)
             except Exception as exc:
                 self._cancel_actions()
                 s.log("action_failed", reason=type(exc).__name__)

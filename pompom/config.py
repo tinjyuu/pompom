@@ -16,6 +16,7 @@ class Settings:
     capture_interval_seconds: int = 60
     audio_enabled: bool = True
     voice_enabled: bool = True
+    idle_behavior_enabled: bool = True
     motion_enabled: bool = True
     condition_preset: str = "phone"
     custom_condition: str = ""
@@ -72,7 +73,12 @@ class SettingsStore:
             raise ValueError("画像の送信間隔は1〜3600秒で指定してください。")
         if any(
             type(v) is not bool
-            for v in (s.audio_enabled, s.voice_enabled, s.motion_enabled)
+            for v in (
+                s.audio_enabled,
+                s.voice_enabled,
+                s.idle_behavior_enabled,
+                s.motion_enabled,
+            )
         ):
             raise ValueError("通知設定はtrue/falseで指定してください。")
         if not isinstance(s.condition_preset, str) or s.condition_preset not in (
