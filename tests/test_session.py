@@ -5,7 +5,7 @@ from pompom.session import Session
 
 
 def running():
-    s = Session(Settings(), Clock())
+    s = Session(Settings(capture_interval_seconds=1), Clock())
     s.begin()
     s.state = "running"
     s.session_id = "session-1"
@@ -80,7 +80,7 @@ def test_put_down_requires_visible_positive_then_confident_negative_fresh_frame(
     assert not s.phone_put_down
 
 
-def test_focus_progress_counts_only_visible_fresh_negatives_and_resets_on_interruption():
+def test_dance_uses_clear_samples_instead_of_unobserved_elapsed_time():
     s = running()
     g = s.generation
     negative = snapshot(
@@ -89,30 +89,31 @@ def test_focus_progress_counts_only_visible_fresh_negatives_and_resets_on_interr
         reason="phone_use_not_detected",
     )
     s.apply(negative, g, from_frame=True)
+    assert s.clear_observations == 1  # The first clear image enables dancing.
     for _ in range(30):
         s.clock.now += 1
         s.apply(negative, g, from_frame=True)
-    assert s.focus_seconds == 30
+    assert s.clear_observations == 3
     s.clock.now += 1
     s.apply(negative, g)  # Status/control replies never add time.
-    assert s.focus_seconds == 30
+    assert s.clear_observations == 3
     s.apply(negative | {"phone_probability": 1}, g, from_frame=True)
-    assert s.focus_seconds == 0
+    assert s.clear_observations == 0
     s.apply(negative, g, from_frame=True)
     s.clock.now += 2
     s.apply(negative, g, from_frame=True)
-    assert s.focus_seconds == 2
+    assert s.clear_observations == 2
     s.fail("connection")
-    assert s.focus_seconds == 0
+    assert s.clear_observations == 0
     s.apply(negative, g, from_frame=True)
     s.clock.now += 10
     s.tick()
-    assert s.focus_seconds == 0 and s.last_focus_sample is None
+    assert s.clear_observations == 0 and s.last_focus_sample is None
     s.apply(negative, g, from_frame=True)
     s.clock.now += 1
     s.apply(negative, g, from_frame=True)
     s.apply(negative | {"observable_probability": 0.2}, g, from_frame=True)
-    assert s.focus_seconds == 0
+    assert s.clear_observations == 0
     s.stop_local("paused", "session_paused")
     s.apply(negative, g, from_frame=True)
     assert s.last_focus_sample is None

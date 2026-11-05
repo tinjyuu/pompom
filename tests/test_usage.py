@@ -9,7 +9,7 @@ from test_api import decision
 
 from pompom.api import ApiError, DirectApi
 from pompom.config import Settings
-from pompom.usage import UsageMeter
+from pompom.usage import COST_COUNTERS, UsageMeter
 
 
 def test_usage_accumulates_real_reported_values_and_survives_restart(tmp_path):
@@ -27,7 +27,7 @@ def test_usage_accumulates_real_reported_values_and_survives_restart(tmp_path):
         result["total_tokens"],
     ) == (130, 2, 132)
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert set(json.loads(path.read_text())) == {
+    assert set(json.loads(path.read_text())) == set(COST_COUNTERS) | {
         "since",
         "requests",
         "successful_requests",
@@ -107,3 +107,75 @@ def test_damaged_or_unwritable_usage_file_does_not_stop_app(tmp_path):
     m = UsageMeter(blocked / "usage.json")
     m.record(True, None)
     assert m.snapshot()["requests"] == 1 and m.snapshot()["storage_error"]
+
+
+def test_decisions_cost_cache_breakdown_output_free_and_restart(tmp_path):
+    import pytest
+
+    path = tmp_path / "usage.json"
+    m = UsageMeter(path)
+    m.record(
+        True,
+        {
+            "input_tokens": 10000,
+            "output_tokens": 123,
+            "input_tokens_details": {"cached_tokens": 2000, "cache_write_tokens": 3000},
+        },
+    )
+    # 5k uncached * $0.10/M + 2k cache reads * $0.01/M + 3k writes * $0.125/M.
+    assert m.snapshot()["estimated_cost_usd"] == pytest.approx(0.000895)
+    m.record(
+        False,
+        {
+            "input_tokens": 1000,
+            "output_tokens": 0,
+            "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+        },
+    )
+    result = UsageMeter(path).snapshot()
+    assert result["estimated_cost_usd"] == pytest.approx(0.000995)
+    assert result["cached_input_tokens"] == 2000
+    assert result["cache_write_input_tokens"] == 3000
+    assert result["estimated_without_cache_tokens"] == 0
+
+
+def test_legacy_totals_are_migrated_without_resetting_counts(tmp_path):
+    path = tmp_path / "usage.json"
+    original = {
+        "since": "2026-11-05T00:00:00+00:00",
+        "requests": 215,
+        "successful_requests": 179,
+        "failed_requests": 36,
+        "usage_reported_requests": 185,
+        "input_tokens": 212915,
+        "output_tokens": 0,
+        "total_tokens": 212915,
+    }
+    path.write_text(json.dumps(original))
+    m = UsageMeter(path)
+    s = m.snapshot()
+    assert s["estimated_cost_usd"] == 0.0212915
+    assert s["estimated_without_cache_tokens"] == 212915
+    assert s["unreported_requests"] == 30
+    assert not s["storage_error"]
+    m.record(True, {"input_tokens": 10, "output_tokens": 0})
+    s = UsageMeter(path).snapshot()
+    assert s["requests"] == 216 and s["since"] == original["since"]
+    assert s["estimated_without_cache_tokens"] == 212925
+    assert s["estimated_cost_usd"] == 0.0212925
+
+
+def test_cost_invalid_cache_details_fall_back_and_unknown_usage_is_not_free():
+    m = UsageMeter()
+    m.record(
+        True,
+        {
+            "input_tokens": 100,
+            "output_tokens": 0,
+            "input_tokens_details": {"cached_tokens": 100, "cache_write_tokens": 100},
+        },
+    )
+    m.record(False, None)
+    assert m.snapshot()["estimated_cost_usd"] == 0.00001
+    assert m.snapshot()["estimated_without_cache_tokens"] == 100
+    assert m.snapshot()["unreported_requests"] == 1

@@ -15,8 +15,8 @@ from .usage import UsageMeter
 
 ENDPOINT = "https://api.openai.com/v1/decisions"
 MODEL = "gpt-6-luna"
-HOLD_MS = 2000
-INTERVAL = 1.0
+HOLD_MS = 0
+DEFAULT_INTERVAL = 60.0
 MAX_GAP = 10.0
 
 
@@ -72,6 +72,7 @@ class Detection:
     label: str = "スマホ"
     required_hold_ms: int = HOLD_MS
     conditions: dict = field(default_factory=dict)
+    interval: float = DEFAULT_INTERVAL
 
     def reset(self):
         for condition in self.conditions.values():
@@ -101,7 +102,7 @@ class DirectApi:
     def _snapshot(self, s, **extra):
         active = s.state not in ("paused", "ended")
         delay = (
-            max(0, (s.accepted + INTERVAL - self.clock()) * 1000)
+            max(0, (s.accepted + s.interval - self.clock()) * 1000)
             if s.accepted is not None and active
             else 0
         )
@@ -146,6 +147,7 @@ class DirectApi:
                 preset=condition.preset,
                 label=condition.label,
                 required_hold_ms=condition.hold_ms,
+                interval=settings.capture_interval_seconds,
             )
             if len(conditions) > 1:
                 s.conditions = {
@@ -155,6 +157,7 @@ class DirectApi:
                         preset=c.preset,
                         label=c.label,
                         required_hold_ms=c.hold_ms,
+                        interval=settings.capture_interval_seconds,
                     )
                     for c in conditions
                 }
@@ -328,41 +331,27 @@ class DirectApi:
 
     def _apply_sample(self, s, phone, observable, accepted):
         s.accepted = accepted
-        if s.last_sample is None or accepted - s.last_sample >= MAX_GAP:
-            s.reset()
+        s.reset()
         s.phone, s.observable, s.last_sample = phone, observable, accepted
         if observable < 0.7:
-            s.reset()
             s.state, s.reason = "unknown", "insufficient_visibility"
         elif phone >= 0.8:
-            s.hold_since = accepted if s.hold_since is None else s.hold_since
-            s.hold_ms = (accepted - s.hold_since) * 1000
-            s.count += 1
-            s.state, s.reason = (
-                "suspected",
-                "phone_use_suspected" if s.preset == "phone" else "condition_suspected",
-            )
-            if s.hold_ms >= s.required_hold_ms:
-                hold = s.hold_ms
-                s.reset()
-                s.state, s.reason = (
-                    "observing",
-                    "phone_use_confirmed"
-                    if s.preset == "phone"
-                    else "condition_confirmed",
-                )
-                return self._snapshot(
-                    s,
-                    notify=True,
-                    notification_id=str(uuid.uuid4()),
-                    continuous_hold_ms=hold,
-                )
-        else:
-            s.reset()
             s.state, s.reason = (
                 "observing",
-                "phone_use_not_detected"
-                if s.preset == "phone"
-                else "condition_not_detected",
+                (
+                    "phone_use_confirmed"
+                    if s.preset == "phone"
+                    else "condition_confirmed"
+                ),
+            )
+            return self._snapshot(s, notify=True, notification_id=str(uuid.uuid4()))
+        else:
+            s.state, s.reason = (
+                "observing",
+                (
+                    "phone_use_not_detected"
+                    if s.preset == "phone"
+                    else "condition_not_detected"
+                ),
             )
         return self._snapshot(s)

@@ -28,7 +28,7 @@ def answer(probability=0.95, visible=0.99):
 
 
 @pytest.mark.parametrize("preset", ["slouch", "custom"])
-def test_condition_prompt_and_three_second_hold(preset):
+def test_condition_prompt_and_immediate_reaction(preset):
     clock = Clock()
     frames, bodies = [answer()], []
 
@@ -46,10 +46,10 @@ def test_condition_prompt_and_three_second_hold(preset):
     api = DirectApi(httpx.MockTransport(handler), clock)
     sid = api.start(s)["session_id"]
     for second in range(3):
-        assert not api.frame(s, sid, str(second), b"jpeg")["notify"]
+        assert api.frame(s, sid, str(second), b"jpeg")["notify"]
         clock.now += 1
     result = api.frame(s, sid, "4", b"jpeg")
-    assert result["notify"] and result["required_hold_ms"] == 3000
+    assert result["notify"] and result["required_hold_ms"] == 0
     assert (
         result["condition_preset"] == preset and result["condition_probability"] == 0.95
     )
@@ -62,7 +62,7 @@ def test_condition_prompt_and_three_second_hold(preset):
     assert api.frame(s, sid, "5", b"jpeg")["state"] == "unknown"
     frames[0] = answer()
     clock.now += 1
-    assert not api.frame(s, sid, "6", b"jpeg")["notify"]
+    assert api.frame(s, sid, "6", b"jpeg")["notify"]
 
 
 def test_preset_migration_validation_and_saved_custom_condition(tmp_path):
@@ -86,7 +86,7 @@ def test_preset_migration_validation_and_saved_custom_condition(tmp_path):
     ):
         with pytest.raises(ValueError):
             store.updated(Settings(), changes)
-    assert resolve_condition(Settings(condition_preset="slouch")).hold_ms == 3000
+    assert resolve_condition(Settings(condition_preset="slouch")).hold_ms == 0
 
 
 def test_condition_clear_celebration_and_focus_streak():
@@ -114,7 +114,7 @@ def test_condition_clear_celebration_and_focus_streak():
     for _ in range(10):
         clock.now += 1
         s.apply(clear, s.generation, True)
-    assert s.focus_seconds == 10 and not s.phone_put_down
+    assert s.clear_observations == 3 and not s.phone_put_down
     s.apply(
         snapshot(
             state="unknown", condition_probability=None, observable_probability=0.1
@@ -122,7 +122,7 @@ def test_condition_clear_celebration_and_focus_streak():
         s.generation,
         True,
     )
-    assert s.focus_seconds == 0
+    assert s.clear_observations == 0
 
 
 def test_settings_change_discards_old_condition_notification(tmp_path):

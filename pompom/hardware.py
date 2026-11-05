@@ -115,7 +115,7 @@ class ReachyHardware:
         }
 
     def set_focus_progress(self, seconds):
-        # Increase the rhythm every ten confirmed seconds, reaching full energy at thirty.
+        # The caller maps each clear camera observation to a ten-point level.
         self.target_energy = min(1.0, max(0.0, math.floor(seconds / 10) / 3))
         if seconds < 10 and self.is_dancing():
             self.cancel()

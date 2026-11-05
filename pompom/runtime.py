@@ -1,9 +1,12 @@
 """On-robot capture/actions and fail-closed direct OpenAI session controls."""
 
+import io
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+
+from PIL import Image
 
 from .api import ApiError
 from .config import SettingsStore
@@ -26,10 +29,12 @@ class Runtime:
         self.pending_generation = None
         self.next_capture = 0.0
         self.closed = False
+        self.last_observation_image = None
         if hasattr(self.hardware, "configure"):
             self.hardware.configure(self.session.settings)
 
     def _cancel_actions(self):
+        self.last_observation_image = None
         try:
             self.hardware.cancel()
         except Exception:
@@ -169,6 +174,22 @@ class Runtime:
                 raise ValueError("処理中です。少し待って再試行してください。")
             return self.hardware.capture()
 
+    def event_image(self, event_id):
+        with self.lock:
+            return self.session.event_images.get(event_id)
+
+    @staticmethod
+    def _record_image(jpeg):
+        # Keep a bounded review image in RAM, never a second capture or API call.
+        try:
+            with Image.open(io.BytesIO(jpeg)) as image:
+                image.thumbnail((512, 512))
+                output = io.BytesIO()
+                image.convert("RGB").save(output, format="JPEG", quality=70)
+                return output.getvalue()
+        except (OSError, ValueError):
+            return None
+
     def test_notification(self):
         with self.lock:
             self._tick()
@@ -197,7 +218,8 @@ class Runtime:
                 or self.session.state != "running"
             ):
                 return None
-        return self.api.frame(settings, sid, "reachy-" + uuid.uuid4().hex, jpeg)
+        result = self.api.frame(settings, sid, "reachy-" + uuid.uuid4().hex, jpeg)
+        return result | {"_review_image": self._record_image(jpeg)}
 
     def step(self):
         with self.lock:
@@ -215,6 +237,9 @@ class Runtime:
                         and generation == s.generation
                         and s.state == "running"
                     ):
+                        result = dict(result)
+                        review_image = result.pop("_review_image", None)
+                        self.last_observation_image = review_image
                         dancing = (
                             hasattr(self.hardware, "is_dancing")
                             and self.hardware.is_dancing()
@@ -277,6 +302,7 @@ class Runtime:
                                 else "action_executed",
                                 notification_id=nid,
                                 actions=actions,
+                                image=review_image,
                             )
                         if s.phone_put_down:
                             actions = self.hardware.celebrate(s.settings)
@@ -286,6 +312,7 @@ class Runtime:
                                 and s.settings.condition_preset == "phone"
                                 else "condition_cleared",
                                 actions=actions,
+                                image=review_image,
                             )
                         if s.state in ("ended", "completed", "paused"):
                             self._cancel_actions()
@@ -296,9 +323,13 @@ class Runtime:
                             if isinstance(exc, ApiError)
                             else "capture_or_action_failed"
                         )
+                        self.last_observation_image = None
                         s.fail(reason)
                         self.next_capture = s.clock() + (
-                            30 if reason == "rate_limited" else 1
+                            max(
+                                s.settings.capture_interval_seconds,
+                                30 if reason == "rate_limited" else 1,
+                            )
                         )
                         if reason in (
                             "unauthorized",
@@ -316,10 +347,16 @@ class Runtime:
             try:
                 if hasattr(self.hardware, "set_focus_progress"):
                     actions = self.hardware.set_focus_progress(
-                        s.focus_seconds if s.state == "running" else 0
+                        s.clear_observations * 10 if s.state == "running" else 0
                     )
                     if actions:
-                        s.log("focus_motion", actions=actions)
+                        s.log(
+                            "focus_motion",
+                            actions=actions,
+                            image=self.last_observation_image
+                            if s.last_focus_sample is not None
+                            else None,
+                        )
                 self.hardware.step()
             except Exception as exc:
                 self._cancel_actions()
@@ -347,6 +384,7 @@ class Runtime:
             if self.closed:
                 return
             self.closed = True
+            self.session.event_images.clear()
             self.session.stop_local("ended", "session_ended")
             self._cancel_actions()
             if hasattr(self.hardware, "shutdown"):

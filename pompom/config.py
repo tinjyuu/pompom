@@ -13,6 +13,7 @@ from .conditions import resolve_condition, resolve_conditions
 class Settings:
     api_key: str = field(default="", repr=False)
     duration_minutes: int = 25
+    capture_interval_seconds: int = 60
     audio_enabled: bool = True
     motion_enabled: bool = True
     condition_preset: str = "phone"
@@ -63,6 +64,11 @@ class SettingsStore:
             raise ValueError("OpenAI APIキーの形式を確認してください。")
         if type(s.duration_minutes) is not int or not 1 <= s.duration_minutes <= 240:
             raise ValueError("集中時間は1〜240分で指定してください。")
+        if (
+            type(s.capture_interval_seconds) is not int
+            or not 1 <= s.capture_interval_seconds <= 3600
+        ):
+            raise ValueError("画像の送信間隔は1〜3600秒で指定してください。")
         if type(s.audio_enabled) is not bool or type(s.motion_enabled) is not bool:
             raise ValueError("通知設定はtrue/falseで指定してください。")
         if not isinstance(s.condition_preset, str) or s.condition_preset not in (

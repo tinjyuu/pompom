@@ -2,7 +2,7 @@
 
 import time
 import uuid
-from collections import deque
+from collections import OrderedDict, deque
 
 
 class Session:
@@ -17,21 +17,27 @@ class Session:
         self.error = None
         self.notification_count = 0
         self.events = deque(maxlen=500)
+        self.event_images = OrderedDict()
         self.seen = set()
         self.detected_conditions = set()
         self.phone_in_use = False
         self.phone_put_down = False
-        self.focus_seconds = 0.0
+        self.clear_observations = 0
         self.last_focus_sample = None
 
     def reset_focus(self):
-        self.focus_seconds = 0.0
+        self.clear_observations = 0
         self.last_focus_sample = None
 
-    def log(self, event, **values):
+    def log(self, event, image=None, **values):
+        event_id = str(uuid.uuid4())
+        if image:
+            self.event_images[event_id] = image
+            while len(self.event_images) > 20:
+                self.event_images.popitem(last=False)
         self.events.append(
             {
-                "id": str(uuid.uuid4()),
+                "id": event_id,
                 "time": time.time(),
                 "device": "reachy_mini",
                 "event": event,
@@ -64,6 +70,7 @@ class Session:
         self.deadline = self.clock() + self.settings.duration_minutes * 60
         self.notification_count = 0
         self.events.clear()
+        self.event_images.clear()
         self.seen.clear()
         return self.generation
 
@@ -75,7 +82,8 @@ class Session:
     def tick(self):
         if (
             self.last_focus_sample is not None
-            and self.clock() - self.last_focus_sample >= 10
+            and self.clock() - self.last_focus_sample
+            >= max(10, self.settings.capture_interval_seconds + 5)
         ):
             self.reset_focus()
         if (
@@ -132,8 +140,9 @@ class Session:
                     cleared = True
             if all_clear:
                 now = self.clock()
-                if self.last_focus_sample is not None:
-                    self.focus_seconds += now - self.last_focus_sample
+                # Each clear observation enables one dance level; this is not a
+                # measurement of unobserved time between camera samples.
+                self.clear_observations = min(3, self.clear_observations + 1)
                 self.last_focus_sample = now
             else:
                 self.reset_focus()
@@ -179,8 +188,16 @@ class Session:
             if self.state in ("starting", "running", "paused", "resuming")
             else 0,
             "notification_count": self.notification_count,
-            "focus_seconds": self.focus_seconds,
+            "clear_observations": self.clear_observations,
             "server": self.remote,
             "error": self.error,
-            "events": list(self.events),
+            "events": [
+                event
+                | (
+                    {"image_url": f"/api/events/{event['id']}/image"}
+                    if event["id"] in self.event_images
+                    else {}
+                )
+                for event in self.events
+            ],
         }

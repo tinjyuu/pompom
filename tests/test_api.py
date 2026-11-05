@@ -21,7 +21,7 @@ def decision(phone=0.95, observable=0.99):
     }
 
 
-def test_direct_endpoint_images_and_hold_without_cooldown():
+def test_direct_endpoint_images_and_immediate_sample_reactions():
     requests = []
     clock = Clock()
 
@@ -41,12 +41,12 @@ def test_direct_endpoint_images_and_hold_without_cooldown():
     api = DirectApi(httpx.MockTransport(handler), clock)
     settings = Settings(api_key="test-secret")
     sid = api.start(settings)["session_id"]
-    assert not api.frame(settings, sid, "first", b"jpeg")["notify"]
+    assert api.frame(settings, sid, "first", b"jpeg")["notify"]
     clock.now += 1
-    assert not api.frame(settings, sid, "second", b"jpeg")["notify"]
+    assert api.frame(settings, sid, "second", b"jpeg")["notify"]
     clock.now += 1
     result = api.frame(settings, sid, "third", b"jpeg")
-    assert result["notify"] and result["continuous_hold_ms"] == 2000
+    assert result["notify"] and result["continuous_hold_ms"] == 0
     assert result["cooldown_remaining_ms"] == 0
     assert not api.get(settings, sid)["notify"]
     clock.now += 1
@@ -95,13 +95,13 @@ def test_error_messages_never_echo_credentials_or_images(status, code):
     assert str(error.value) == code
 
 
-def test_low_visibility_error_and_long_gap_reset_hold():
+def test_low_visibility_and_errors_cannot_trigger_but_next_valid_sample_can():
     clock = Clock()
     value = [decision()]
     api = DirectApi(
         httpx.MockTransport(lambda _: httpx.Response(200, json=value[0])), clock
     )
-    s = Settings(api_key="test")
+    s = Settings(api_key="test", capture_interval_seconds=1)
     sid = api.start(s)["session_id"]
     api.frame(s, sid, "1", b"jpeg")
     clock.now += 1
@@ -111,7 +111,7 @@ def test_low_visibility_error_and_long_gap_reset_hold():
     clock.now += 1
     assert api.frame(s, sid, "3", b"jpeg")["continuous_hold_ms"] == 0
     clock.now += 11
-    assert not api.frame(s, sid, "4", b"jpeg")["notify"]
+    assert api.frame(s, sid, "4", b"jpeg")["notify"]
     value[0] = {}
     with pytest.raises(ApiError):
         api.frame(s, sid, "5", b"jpeg")

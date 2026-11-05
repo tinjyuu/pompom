@@ -69,6 +69,15 @@ def attach_routes(app, get_runtime):
     def status():
         return runtime().snapshot()
 
+    @app.get("/api/events/{event_id}/image")
+    def event_image(event_id: str):
+        image = runtime().event_image(event_id)
+        if image is None:
+            raise HTTPException(
+                404, "確認画像は保持期間を過ぎたか、セッション終了で削除されました。"
+            )
+        return Response(image, media_type="image/jpeg")
+
     @app.post("/api/settings")
     def settings(changes: dict):
         return invoke(lambda: runtime().configure(changes))

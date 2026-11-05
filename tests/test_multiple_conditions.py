@@ -29,7 +29,7 @@ def multi_answer(values):
     }
 
 
-def test_independent_timers_visibility_and_one_request_per_frame(tmp_path):
+def test_independent_visibility_and_immediate_reactions_in_one_request(tmp_path):
     clock, requests = Clock(), []
     values = {"phone": (0.95, 0.99), "slouch": (0.95, 0.99), "custom": (1, 0.1)}
 
@@ -55,14 +55,13 @@ def test_independent_timers_visibility_and_one_request_per_frame(tmp_path):
     for second in range(4):
         frames.append(api.frame(settings, sid, str(second), b"jpeg"))
         clock.now += 1
-    assert [r["condition_preset"] for r in frames[2]["conditions"] if r["notify"]] == [
-        "phone"
-    ]
-    assert [r["condition_preset"] for r in frames[3]["conditions"] if r["notify"]] == [
-        "slouch"
-    ]
+    assert all(
+        [r["condition_preset"] for r in frame["conditions"] if r["notify"]]
+        == ["phone", "slouch"]
+        for frame in frames
+    )
     assert all(f["conditions"][2]["state"] == "unknown" for f in frames)
-    assert all(f["next_capture_after_ms"] == 1000 for f in frames)
+    assert all(f["next_capture_after_ms"] == 60000 for f in frames)
     assert len(requests) == 4
     assert api.usage.snapshot()["requests"] == 4
     assert api.usage.snapshot()["total_tokens"] == 48
@@ -128,16 +127,16 @@ def test_focus_requires_every_condition_clear_and_deduplicates_notifications():
     apply(0.9, 0.9)
     apply(0, 0.9, notify=True, notification_id="slouch")
     apply(0, 0.9, notify=True, notification_id="slouch")
-    assert not s.phone_put_down and s.focus_seconds == 0
+    assert not s.phone_put_down and s.clear_observations == 0
     assert s.notification_count == 1
     apply(0, 0)
     assert s.phone_put_down
     for _ in range(10):
         clock.now += 1
         apply(0, 0)
-    assert s.focus_seconds == 10
+    assert s.clear_observations == 3
     apply(0, 0, visible=0.1)
-    assert s.focus_seconds == 0
+    assert s.clear_observations == 0
 
 
 @pytest.mark.parametrize("stop", ["pause", "end", "deadline"])
