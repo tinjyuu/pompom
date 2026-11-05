@@ -60,7 +60,14 @@ class Session:
             }
 
     def begin(self):
-        if self.state in ("starting", "running", "paused", "resuming"):
+        if self.state in (
+            "starting",
+            "running",
+            "paused",
+            "resuming",
+            "free",
+            "free_paused",
+        ):
             raise ValueError("進行中のセッションを終了してください。")
         self.invalidate()
         self.state = "starting"
@@ -73,6 +80,19 @@ class Session:
         self.event_images.clear()
         self.seen.clear()
         return self.generation
+
+    def begin_free(self):
+        self.invalidate()
+        self.state = "free"
+        self.session_id = None
+        self.remote = None
+        self.error = None
+        self.deadline = 0.0
+        self.notification_count = 0
+        self.events.clear()
+        self.event_images.clear()
+        self.seen.clear()
+        self.log("free_started")
 
     def stop_local(self, state, event):
         self.invalidate()
@@ -184,7 +204,11 @@ class Session:
         return {
             "state": self.state,
             "session_id": self.session_id,
-            "remaining_seconds": max(0, self.deadline - self.clock())
+            "mode": "free" if self.state in ("free", "free_paused") else "focus",
+            "unlimited": self.state in ("free", "free_paused"),
+            "remaining_seconds": None
+            if self.state in ("free", "free_paused")
+            else max(0, self.deadline - self.clock())
             if self.state in ("starting", "running", "paused", "resuming")
             else 0,
             "notification_count": self.notification_count,

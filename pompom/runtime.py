@@ -77,6 +77,34 @@ class Runtime:
                 raise ValueError("アプリは停止しています。")
             settings = s.settings
             sid = s.session_id
+            if action == "free":
+                if s.state in ("starting", "running", "paused", "resuming"):
+                    s.stop_local("ended", "session_ended")
+                    self._queue_end(settings, sid)
+                s.begin_free()
+                if hasattr(self.hardware, "configure"):
+                    self.hardware.configure(settings)
+                self._cancel_actions()
+                return self.snapshot()  # No API client, camera, key or consent needed.
+            if s.state in ("free", "free_paused"):
+                if action == "pause" and s.state == "free":
+                    s.stop_local("free_paused", "free_paused")
+                elif action == "resume" and s.state == "free_paused":
+                    s.invalidate()
+                    s.state = "free"
+                    s.log("free_resumed")
+                elif action == "end":
+                    s.stop_local("ended", "free_ended")
+                else:
+                    raise ValueError("無料モードを終了してから操作してください。")
+                self._cancel_actions()
+                if hasattr(self.hardware, "configure"):
+                    self.hardware.configure(
+                        replace(settings, motion_enabled=False)
+                        if s.state == "free_paused"
+                        else settings
+                    )
+                return self.snapshot()
             if action == "start":
                 if not consent:
                     raise ValueError("OpenAIへの画像送信に同意してください。")
@@ -160,7 +188,11 @@ class Runtime:
                 s.invalidate()
             s.settings = settings
             if hasattr(self.hardware, "configure"):
-                self.hardware.configure(settings)
+                self.hardware.configure(
+                    replace(settings, motion_enabled=False)
+                    if s.state == "free_paused"
+                    else settings
+                )
             self._cancel_actions()
             s.log("settings_changed")
             return self.snapshot()
@@ -168,6 +200,8 @@ class Runtime:
     def preview(self):
         with self.lock:
             self._tick()
+            if self.session.state in ("free", "free_paused"):
+                raise ValueError("無料モードではカメラを使用しません。")
             if self.closed or self.session.state in ("starting", "running", "resuming"):
                 raise ValueError("カメラ確認は一時停止してから行ってください。")
             if self.pending is not None:
@@ -373,7 +407,7 @@ class Runtime:
             try:
                 if hasattr(self.hardware, "set_idle_context"):
                     self.hardware.set_idle_context(
-                        s.state == "idle"
+                        s.state in ("idle", "free")
                         or (
                             s.state == "running"
                             and not s.error

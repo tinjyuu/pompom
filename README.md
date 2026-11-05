@@ -23,6 +23,10 @@ A little focus companion for Reachy Mini Wireless. PomPom dances when you stay o
 
 The app runs on the robot and connects directly to OpenAI Decisions API. No always-on Mac or shared backend is required. **The robot control screen and recorded voice reminders are currently in Japanese.**
 
+## Free companion mode
+
+Choose **無料で遊ぶ** for unlimited idle motions, spontaneous gestures and nonverbal sounds. No OpenAI API key, camera consent, image capture, or model requests are used in this mode. Pause, resume, and end are local controls; there is no timer expiry. Settings changes keep free mode active. Switching from AI monitoring invalidates any pending detection; a previously submitted request may still report usage, but cannot trigger a reaction in free mode. Camera preview is disabled until free mode ends. The AI settings and usage details are folded away to keep the main screen short.
+
 ## Get started
 
 1. Install [this Space](https://huggingface.co/spaces/tinjyuu/pompom) from your Reachy Mini dashboard, then launch `pompom`.
