@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-required = {'pompom/main.py', 'pompom/static/index.html', 'pompom/static/main.js', 'pompom/assets/reminder-1.wav', 'pompom/assets/reminder-2.wav'}
+required = {'pompom/main.py', 'pompom/static/index.html', 'pompom/static/main.js', 'pompom/assets/reminder-1.wav', 'pompom/assets/reminder-2.wav', 'pompom/speech.py', 'pompom/assets/speech-slouch.wav', 'pompom/assets/speech-custom.wav', 'pompom/assets/speech-phone-slouch.wav', 'pompom/assets/speech-phone-custom.wav', 'pompom/assets/speech-slouch-custom.wav', 'pompom/assets/speech-phone-slouch-custom.wav'}
 
 def check_wav(data, name):
     fmt = data.index(b'fmt ') + 8
@@ -13,7 +13,9 @@ def check_wav(data, name):
     assert encoding == 1 and alignment == channels * bits // 8, name
     assert byte_rate == rate * alignment, f'{name}: invalid WAV byte rate'
 
-for path in [*sorted((root / 'dist').glob('*.whl')), *sorted((root / 'dist').glob('*.tar.gz'))]:
+import tomllib
+version = tomllib.loads((root / 'pyproject.toml').read_text())['project']['version']
+for path in [*sorted((root / 'dist').glob(f'pompom-{version}-*.whl')), *sorted((root / 'dist').glob(f'pompom-{version}.tar.gz'))]:
     if path.suffix == '.whl':
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()

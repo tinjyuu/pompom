@@ -171,5 +171,5 @@ def test_non_phone_reaction_never_queues_phone_recording(preset):
     hardware = ReachyHardware(mini)
     hardware.fear = object()
     hardware.notify(Settings(condition_preset=preset, custom_condition="頭を手で隠す"))
-    assert hardware.emotion["audio"] and not hardware.emotion["speech"]
+    assert hardware.emotion["audio"] and hardware.emotion["speech"] == (preset,)
     assert hardware.queued_speech is None

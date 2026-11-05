@@ -10,6 +10,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from .speech import speech_path
+
 EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
 FEAR_MOVE = "fear1"
 HAPPY_MOVE = "cheerful1"
@@ -153,8 +155,13 @@ class ReachyHardware:
         self.mini.media.play_sound(str(sound))
         self.audio_until = self.clock() + duration + 0.2
 
-    def _play_reminder(self):
-        self._play_sound(random.choice(REMINDER_SOUNDS))
+    def _play_reminder(self, presets=("phone",)):
+        sound = (
+            random.choice(REMINDER_SOUNDS)
+            if set(presets) == {"phone"}
+            else speech_path(presets)
+        )
+        self._play_sound(sound)
 
     def notify(self, settings):
         # A confirmed API notification must not restart a fear triggered by a dance interruption.
@@ -165,25 +172,23 @@ class ReachyHardware:
         ):
             return [{"action": FEAR_MOVE, "status": "already_playing"}]
         self.cancel()
+        presets = settings.condition_presets or (settings.condition_preset,)
+        speech = presets if settings.audio_enabled and settings.voice_enabled else ()
         results = []
         if settings.motion_enabled and self.fear is not None:
             self._start_emotion(
                 self.fear,
                 FEAR_MOVE,
                 settings.audio_enabled,
-                speech=settings.condition_preset == "phone",
+                speech=speech,
             )
             results.append({"action": FEAR_MOVE, "status": "started"})
         elif settings.motion_enabled:
             results.append({"action": FEAR_MOVE, "status": "unavailable"})
         # Fear keeps its original sound and queues the Japanese reminder after it.
-        if (
-            settings.audio_enabled
-            and self.emotion is None
-            and settings.condition_preset == "phone"
-        ):
+        if speech and self.emotion is None:
             try:
-                self._play_reminder()
+                self._play_reminder(speech)
                 results.append({"action": "reminder", "status": "started"})
             except Exception:
                 results.append({"action": "reminder", "status": "failed"})
@@ -217,9 +222,9 @@ class ReachyHardware:
                         # Official presets may use OGG, not the bundled PCM WAV format.
                         self._play_sound(move.sound_path, duration=move.duration)
                         if e.get("speech"):
-                            self.queued_speech = self.audio_until
+                            self.queued_speech = (self.audio_until, e["speech"])
                     elif e.get("speech"):
-                        self._play_reminder()
+                        self._play_reminder(e["speech"])
             head, antennas, body = move.evaluate(
                 min(t - transition, move.timestamps[-1] - 1e-6)
             )
@@ -280,9 +285,10 @@ class ReachyHardware:
         if self.audio_until and self.clock() >= self.audio_until:
             self.mini.media.stop_playing()
             self.audio_until = 0
-        if self.queued_speech is not None and self.clock() >= self.queued_speech:
+        if self.queued_speech is not None and self.clock() >= self.queued_speech[0]:
+            _, presets = self.queued_speech
             self.queued_speech = None
-            self._play_reminder()
+            self._play_reminder(presets)
 
     def cancel(self):
         self.queued_speech = None

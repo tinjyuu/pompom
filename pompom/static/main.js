@@ -37,10 +37,10 @@ function render(s){
   $('pause').disabled=pending||s.state!=='running';$('resume').disabled=pending||s.state!=='paused';$('end').disabled=pending||!active;
   $('preview').disabled=pending||s.state==='running'||s.busy||!s.capabilities.camera;
   $('test').disabled=pending||s.state==='running';
-  $('audio').disabled=!s.capabilities.actions.includes('reminder');
+  $('audio').disabled=!s.capabilities.actions.includes('reminder');$('voice').disabled=!s.capabilities.actions.includes('reminder');
   $('key-status').textContent=s.settings.api_key_configured?'（保存済み）':'（未設定）';
   $('capabilities').textContent=`ダンス: ${s.capabilities.actions.includes('dance1')?'利用可能':'未ロード'} · 😨 Fear: ${s.capabilities.actions.includes('fear1')?'利用可能':'未ロード'} · カメラ: ${s.capabilities.camera?'利用可能':'未接続'} · 声かけ: ${s.capabilities.actions.includes('reminder')?'利用可能':'未接続'}`;
-  if(!initialized){$('minutes').value=s.settings.duration_minutes;$('capture-interval').value=s.settings.capture_interval_seconds??60;$('audio').checked=s.settings.audio_enabled;const presets=s.settings.condition_presets||[s.settings.condition_preset||'phone'];conditionInputs().forEach(input=>input.checked=presets.includes(input.value));$('custom-condition').value=s.settings.custom_condition||'';updateConditionFields();initialized=true;}
+  if(!initialized){$('minutes').value=s.settings.duration_minutes;$('capture-interval').value=s.settings.capture_interval_seconds??60;$('audio').checked=s.settings.audio_enabled;$('voice').checked=s.settings.voice_enabled??true;const presets=s.settings.condition_presets||[s.settings.condition_preset||'phone'];conditionInputs().forEach(input=>input.checked=presets.includes(input.value));$('custom-condition').value=s.settings.custom_condition||'';updateConditionFields();initialized=true;}
   if(s.events.length===0){$('event-photo-dialog').close();$('event-photo-full').removeAttribute('src');}
   const eventSignature=s.events.map(e=>e.id+(e.image_url||'')).join('|');
   if(eventSignature!==lastEventsSignature){
@@ -54,7 +54,7 @@ $('close-event-photo').addEventListener('click',()=>{$('event-photo-dialog').clo
 conditionInputs().forEach(input=>input.addEventListener('change',updateConditionFields));
 $('consent').addEventListener('change',()=>{if(latest)render(latest);});
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>action(async()=>{clearPreview();render(await(await api('session/'+b.dataset.action,{consent:$('consent').checked})).json());})));
-$('settings').addEventListener('submit',e=>{e.preventDefault();action(async()=>{const presets=selectedConditions();if(!presets.length)throw Error('反応する条件を1つ以上選んでください。');const body={condition_presets:presets,custom_condition:$('custom-condition').value.trim(),duration_minutes:Number($('minutes').value),capture_interval_seconds:Number($('capture-interval').value),audio_enabled:$('audio').checked,motion_enabled:true};if($('api-key').value)body.api_key=$('api-key').value;initialized=false;render(await(await api('settings',body)).json());$('api-key').value='';});});
+$('settings').addEventListener('submit',e=>{e.preventDefault();action(async()=>{const presets=selectedConditions();if(!presets.length)throw Error('反応する条件を1つ以上選んでください。');const body={condition_presets:presets,custom_condition:$('custom-condition').value.trim(),duration_minutes:Number($('minutes').value),capture_interval_seconds:Number($('capture-interval').value),audio_enabled:$('audio').checked,voice_enabled:$('voice').checked,motion_enabled:true};if($('api-key').value)body.api_key=$('api-key').value;initialized=false;render(await(await api('settings',body)).json());$('api-key').value='';});});
 $('delete-key').addEventListener('click',()=>action(async()=>{await api('session/end',{});render(await(await api('settings',{api_key:''})).json());$('api-key').value='';}));
 $('preview').addEventListener('click',()=>action(async()=>{const blob=await(await api('preview',{})).blob();clearPreview();imageUrl=URL.createObjectURL(blob);$('frame').src=imageUrl;$('frame').hidden=false;$('preview-placeholder').hidden=true;}));
 $('test').addEventListener('click',()=>action(async()=>render(await(await api('test-notification',{})).json())));

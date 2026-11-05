@@ -293,8 +293,22 @@ class Runtime:
                                     "condition_preset", s.settings.condition_preset
                                 )
                             )
+                            detected = {
+                                r.get("condition_preset", s.settings.condition_preset)
+                                for r in triggered
+                            }
+                            if interrupt_dance:
+                                detected.add("phone")
                             actions = self.hardware.notify(
-                                replace(s.settings, condition_preset=preset)
+                                replace(
+                                    s.settings,
+                                    condition_preset=preset,
+                                    condition_presets=tuple(
+                                        p
+                                        for p in ("phone", "slouch", "custom")
+                                        if p in detected
+                                    ),
+                                )
                             )
                             s.log(
                                 "dance_interrupted"
