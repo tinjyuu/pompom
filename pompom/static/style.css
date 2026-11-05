@@ -3,3 +3,5 @@
 .app-icon{object-fit:contain;flex-shrink:0;border-radius:22%;max-width:28vw;height:auto}
 
 select,textarea{display:block;width:100%;min-height:44px;border:1px solid #b6c5b8;border-radius:8px;padding:10px;font:inherit;margin-top:6px;background:#fff;color:inherit}textarea{resize:vertical}
+
+fieldset{border:1px solid #b6c5b8;border-radius:12px;margin:14px 0;padding:8px 16px}legend{padding:0 6px;font-weight:600}fieldset .check{margin:10px 0}

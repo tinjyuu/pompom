@@ -3,6 +3,7 @@
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 
 from .api import ApiError
 from .config import SettingsStore
@@ -223,23 +224,53 @@ class Runtime:
                         self.next_capture = (
                             s.clock() + result["next_capture_after_ms"] / 1000
                         )
-                        phone = result.get(
-                            "condition_probability", result.get("phone_probability")
+                        results = result.get("conditions", [result])
+                        phone_result = next(
+                            (
+                                r
+                                for r in results
+                                if r.get(
+                                    "condition_preset", s.settings.condition_preset
+                                )
+                                == "phone"
+                            ),
+                            None,
                         )
-                        observable = result["observable_probability"]
                         interrupt_dance = (
                             dancing
-                            and s.settings.condition_preset == "phone"
                             and s.state == "running"
-                            and phone is not None
-                            and phone >= 0.8
-                            and observable is not None
-                            and observable >= 0.7
-                            and result["state"]
+                            and phone_result is not None
+                            and (
+                                phone_result.get(
+                                    "condition_probability",
+                                    phone_result.get("phone_probability"),
+                                )
+                                or 0
+                            )
+                            >= 0.8
+                            and (phone_result["observable_probability"] or 0) >= 0.7
+                            and phone_result["state"]
                             in ("suspected", "observing", "cooldown")
                         )
                         if nid or interrupt_dance:
-                            actions = self.hardware.notify(s.settings)
+                            triggered = [r for r in results if r["notify"]]
+                            preset = (
+                                "phone"
+                                if interrupt_dance
+                                or any(
+                                    r.get(
+                                        "condition_preset", s.settings.condition_preset
+                                    )
+                                    == "phone"
+                                    for r in triggered
+                                )
+                                else triggered[0].get(
+                                    "condition_preset", s.settings.condition_preset
+                                )
+                            )
+                            actions = self.hardware.notify(
+                                replace(s.settings, condition_preset=preset)
+                            )
                             s.log(
                                 "dance_interrupted"
                                 if interrupt_dance
@@ -251,7 +282,8 @@ class Runtime:
                             actions = self.hardware.celebrate(s.settings)
                             s.log(
                                 "phone_put_down"
-                                if s.settings.condition_preset == "phone"
+                                if len(results) == 1
+                                and s.settings.condition_preset == "phone"
                                 else "condition_cleared",
                                 actions=actions,
                             )

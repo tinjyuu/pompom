@@ -18,6 +18,7 @@ class Session:
         self.notification_count = 0
         self.events = deque(maxlen=500)
         self.seen = set()
+        self.detected_conditions = set()
         self.phone_in_use = False
         self.phone_put_down = False
         self.focus_seconds = 0.0
@@ -41,6 +42,7 @@ class Session:
     def invalidate(self):
         self.generation += 1
         self.reset_focus()
+        self.detected_conditions = set()
         self.phone_in_use = False
         self.phone_put_down = False
         if self.remote:
@@ -104,48 +106,56 @@ class Session:
         if snapshot["state"] == "paused":
             self.state = "paused"
             return None
+        results = snapshot.get("conditions", [snapshot])
         if from_frame:
-            observable = snapshot["observable_probability"]
-            phone = snapshot.get(
-                "condition_probability", snapshot.get("phone_probability")
-            )
-            clear_reason = (
-                "phone_use_not_detected"
-                if self.settings.condition_preset == "phone"
-                else "condition_not_detected"
-            )
-            if (
-                snapshot["reason"] == clear_reason
-                and observable is not None
-                and observable >= 0.7
-                and phone is not None
-                and phone <= 0.2
-            ):
+            all_clear = True
+            cleared = False
+            for result in results:
+                preset = result.get("condition_preset", self.settings.condition_preset)
+                probability = result.get(
+                    "condition_probability", result.get("phone_probability")
+                )
+                observable = result["observable_probability"]
+                visible = observable is not None and observable >= 0.7
+                is_clear = (
+                    visible
+                    and probability is not None
+                    and probability <= 0.2
+                    and result["reason"]
+                    in ("phone_use_not_detected", "condition_not_detected")
+                )
+                all_clear = all_clear and is_clear
+                if visible and probability is not None and probability >= 0.8:
+                    self.detected_conditions.add(preset)
+                elif is_clear and preset in self.detected_conditions:
+                    self.detected_conditions.remove(preset)
+                    cleared = True
+            if all_clear:
                 now = self.clock()
                 if self.last_focus_sample is not None:
                     self.focus_seconds += now - self.last_focus_sample
                 self.last_focus_sample = now
             else:
                 self.reset_focus()
-            if observable is not None and observable >= 0.7 and phone is not None:
-                if phone >= 0.8:
-                    self.phone_in_use = True
-                elif phone <= 0.2 and snapshot["reason"] == clear_reason:
-                    self.phone_put_down = self.phone_in_use
-                    self.phone_in_use = False
-        nid = snapshot.get("notification_id")
-        if from_frame and snapshot["notify"] and nid and nid not in self.seen:
-            self.seen.add(nid)
-            self.notification_count += 1
-            self.log(
-                "phone_detected"
-                if self.settings.condition_preset == "phone"
-                else "condition_detected",
-                notification_id=nid,
-                condition_label=self.settings.public()["condition"]["label"],
-            )
-            return nid
-        return None
+            self.phone_in_use = bool(self.detected_conditions)
+            # Do not celebrate over another condition or an uncertain observation.
+            self.phone_put_down = cleared and all_clear
+        notified = False
+        for result in results:
+            nid = result.get("notification_id")
+            if from_frame and result["notify"] and nid and nid not in self.seen:
+                self.seen.add(nid)
+                notified = notified or nid
+                self.notification_count += 1
+                preset = result.get("condition_preset", self.settings.condition_preset)
+                self.log(
+                    "phone_detected" if preset == "phone" else "condition_detected",
+                    notification_id=nid,
+                    condition_label=result.get(
+                        "condition_label", self.settings.public()["condition"]["label"]
+                    ),
+                )
+        return notified or None
 
     def fail(self, reason):
         self.reset_focus()

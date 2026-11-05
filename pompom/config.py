@@ -6,7 +6,7 @@ import tempfile
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
-from .conditions import resolve_condition
+from .conditions import resolve_condition, resolve_conditions
 
 
 @dataclass(frozen=True)
@@ -17,11 +17,14 @@ class Settings:
     motion_enabled: bool = True
     condition_preset: str = "phone"
     custom_condition: str = ""
+    condition_presets: tuple[str, ...] = ()
 
     def public(self):
         return {k: v for k, v in asdict(self).items() if k != "api_key"} | {
             "api_key_configured": bool(self.api_key),
             "condition": resolve_condition(self).public(),
+            "conditions": [c.public() for c in resolve_conditions(self)],
+            "condition_presets": [c.preset for c in resolve_conditions(self)],
         }
 
 
@@ -46,6 +49,11 @@ class SettingsStore:
     def updated(current, changes):
         if not isinstance(changes, dict) or changes.keys() - set(asdict(current)):
             raise ValueError("未対応の設定です。")
+        changes = dict(changes)
+        if "condition_preset" in changes and "condition_presets" not in changes:
+            changes[
+                "condition_presets"
+            ] = ()  # Migrate legacy single-condition clients.
         s = replace(current, **changes)
         if (
             not isinstance(s.api_key, str)
@@ -69,8 +77,29 @@ class SettingsStore:
             or any(ord(c) < 32 and c not in "\n\t" for c in s.custom_condition)
         ):
             raise ValueError("自由入力の条件は1000文字以内で入力してください。")
-        s = replace(s, custom_condition=s.custom_condition.strip(), motion_enabled=True)
-        resolve_condition(s)
+        presets = s.condition_presets
+        if (
+            not isinstance(presets, (list, tuple))
+            or any(
+                not isinstance(p, str) or p not in ("phone", "slouch", "custom")
+                for p in presets
+            )
+            or len(set(presets)) != len(presets)
+            or (
+                "condition_presets" in changes
+                and not presets
+                and "condition_preset" not in changes
+            )
+        ):
+            raise ValueError("反応する条件を1つ以上選んでください。")
+        s = replace(
+            s,
+            custom_condition=s.custom_condition.strip(),
+            motion_enabled=True,
+            condition_presets=tuple(presets),
+            condition_preset=presets[0] if presets else s.condition_preset,
+        )
+        resolve_conditions(s)
         return s
 
     def save(self, settings):

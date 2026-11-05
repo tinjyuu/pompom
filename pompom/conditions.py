@@ -45,10 +45,11 @@ PRESETS = {
 }
 
 
-def resolve_condition(settings):
-    if settings.condition_preset in PRESETS:
-        return PRESETS[settings.condition_preset]
-    if settings.condition_preset != "custom" or not settings.custom_condition.strip():
+def resolve_condition(settings, preset=None):
+    preset = preset or settings.condition_preset
+    if preset in PRESETS:
+        return PRESETS[preset]
+    if preset != "custom" or not settings.custom_condition.strip():
         raise ValueError("自由入力の条件を入力してください。")
     return Condition(
         "custom",
@@ -58,3 +59,10 @@ def resolve_condition(settings):
         "A person and the body parts or objects needed to assess the supplied visible condition are clearly visible. False if the condition cannot be judged from this image alone, requires hidden information, a diagnosis, identity, intent, emotion, concentration or another internal mental state, or if the evidence is ambiguous, occluded, blurred or dark.",
         3000,
     )
+
+
+def resolve_conditions(settings):
+    return [
+        resolve_condition(settings, preset)
+        for preset in (settings.condition_presets or (settings.condition_preset,))
+    ]

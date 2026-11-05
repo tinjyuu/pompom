@@ -28,14 +28,14 @@ The app runs on the robot and connects directly to OpenAI Decisions API. No alwa
 1. Install [this Space](https://huggingface.co/spaces/tinjyuu/pompom) from your Reachy Mini dashboard, then launch `pompom`.
 2. Open **http://reachy-mini.local:8043/**, or use your robot's IP address with port `8043`.
 3. Enter your own OpenAI API key. Check the camera view and test a notification.
-4. Choose **Phone**, **Slouching**, or **Custom** in the condition selector. For Custom, describe a condition that can be seen by the camera.
+4. Select one or more of **Phone**, **Slouching**, and **Custom**. For Custom, describe a condition that can be seen by the camera.
 5. Save your focus duration (25 minutes by default), consent to sending camera images, and start.
 
 The Space is an introduction and distribution page. Enter your API key on the robot's control screen. OpenAI API usage charges and data retention terms apply.
 
-## Choose a condition
+## Choose conditions
 
-One condition is active per session. The default is **Phone**:
+Select multiple conditions to monitor together. PomPom reacts when any selected condition persists for its required time. Each condition has its own visibility check and timer; all selected conditions share a single image request. The default is **Phone**:
 
 - **Phone:** react to a smartphone held in a hand; a phone resting on the desk is excluded. Requires two seconds of confident detection.
 - **Slouching:** react to a visibly rounded upper back with the head or shoulders leaning forward. Requires three seconds. Position the camera so the head, shoulders, and torso are visible; a close-up of the face is insufficient.
@@ -51,11 +51,11 @@ Counters persist across sessions and app restarts in `~/.config/pompom/usage.jso
 
 ## How it behaves
 
-- After 10 seconds of clear results where the selected condition is absent, PomPom performs the official `dance1` motion.
+- After 10 seconds of clear results where all selected conditions are absent, PomPom performs the official `dance1` motion.
 - While dancing, the first returned phone-holding detection interrupts the dance and starts `fear1`.
 - Otherwise, phone-holding probability of at least 0.8 and visibility of at least 0.7 must persist for two seconds to trigger a reminder. There is no cooldown.
-- For Phone, the preset emotion sound is followed by one of two randomly selected Japanese voice reminders. Slouching and Custom keep the preset motion and sound, without playing the phone-specific recording.
-- Once the previously detected condition is clearly absent, PomPom celebrates once with `cheerful1`.
+- When Phone triggers a reaction, the preset emotion sound is followed by one of two randomly selected Japanese voice reminders. Slouching and Custom keep the preset motion and sound, without playing the phone-specific recording.
+- Once a previously detected condition clears and all selected conditions are clearly absent, PomPom celebrates once with `cheerful1`.
 - Pause, stop, settings changes, and timer expiry take effect locally; late inference results are discarded.
 - Uncertain results, communication failures, or a detection gap of 10 seconds reset the focus streak and stop the dance.
 - The timer and observation continue on the robot when the control page is closed, provided the app keeps running.
