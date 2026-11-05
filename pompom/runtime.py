@@ -58,6 +58,9 @@ class Runtime:
                 "settings": self.session.settings.public(),
                 "capabilities": self.hardware.capabilities(),
                 "busy": self.pending is not None,
+                "usage": self.api.usage.snapshot()
+                if hasattr(self.api, "usage")
+                else None,
             }
 
     def control(self, action, consent=False):
@@ -220,10 +223,13 @@ class Runtime:
                         self.next_capture = (
                             s.clock() + result["next_capture_after_ms"] / 1000
                         )
-                        phone = result["phone_probability"]
+                        phone = result.get(
+                            "condition_probability", result.get("phone_probability")
+                        )
                         observable = result["observable_probability"]
                         interrupt_dance = (
                             dancing
+                            and s.settings.condition_preset == "phone"
                             and s.state == "running"
                             and phone is not None
                             and phone >= 0.8
@@ -243,7 +249,12 @@ class Runtime:
                             )
                         if s.phone_put_down:
                             actions = self.hardware.celebrate(s.settings)
-                            s.log("phone_put_down", actions=actions)
+                            s.log(
+                                "phone_put_down"
+                                if s.settings.condition_preset == "phone"
+                                else "condition_cleared",
+                                actions=actions,
+                            )
                         if s.state in ("ended", "completed", "paused"):
                             self._cancel_actions()
                 except Exception as exc:

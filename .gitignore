@@ -10,3 +10,4 @@ dist/
 *.log
 settings.json
 .DS_Store
+usage.json

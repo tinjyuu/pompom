@@ -6,6 +6,8 @@ import tempfile
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
+from .conditions import resolve_condition
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -13,10 +15,13 @@ class Settings:
     duration_minutes: int = 25
     audio_enabled: bool = True
     motion_enabled: bool = True
+    condition_preset: str = "phone"
+    custom_condition: str = ""
 
     def public(self):
         return {k: v for k, v in asdict(self).items() if k != "api_key"} | {
-            "api_key_configured": bool(self.api_key)
+            "api_key_configured": bool(self.api_key),
+            "condition": resolve_condition(self).public(),
         }
 
 
@@ -52,7 +57,21 @@ class SettingsStore:
             raise ValueError("集中時間は1〜240分で指定してください。")
         if type(s.audio_enabled) is not bool or type(s.motion_enabled) is not bool:
             raise ValueError("通知設定はtrue/falseで指定してください。")
-        return replace(s, motion_enabled=True)
+        if not isinstance(s.condition_preset, str) or s.condition_preset not in (
+            "phone",
+            "slouch",
+            "custom",
+        ):
+            raise ValueError("反応する条件を選んでください。")
+        if (
+            not isinstance(s.custom_condition, str)
+            or len(s.custom_condition) > 1000
+            or any(ord(c) < 32 and c not in "\n\t" for c in s.custom_condition)
+        ):
+            raise ValueError("自由入力の条件は1000文字以内で入力してください。")
+        s = replace(s, custom_condition=s.custom_condition.strip(), motion_enabled=True)
+        resolve_condition(s)
+        return s
 
     def save(self, settings):
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

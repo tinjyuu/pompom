@@ -28,17 +28,34 @@ The app runs on the robot and connects directly to OpenAI Decisions API. No alwa
 1. Install [this Space](https://huggingface.co/spaces/tinjyuu/pompom) from your Reachy Mini dashboard, then launch `pompom`.
 2. Open **http://reachy-mini.local:8043/**, or use your robot's IP address with port `8043`.
 3. Enter your own OpenAI API key. Check the camera view and test a notification.
-4. Save your focus duration (25 minutes by default), consent to sending camera images, and start.
+4. Choose **Phone**, **Slouching**, or **Custom** in the condition selector. For Custom, describe a condition that can be seen by the camera.
+5. Save your focus duration (25 minutes by default), consent to sending camera images, and start.
 
 The Space is an introduction and distribution page. Enter your API key on the robot's control screen. OpenAI API usage charges and data retention terms apply.
 
+## Choose a condition
+
+One condition is active per session. The default is **Phone**:
+
+- **Phone:** react to a smartphone held in a hand; a phone resting on the desk is excluded. Requires two seconds of confident detection.
+- **Slouching:** react to a visibly rounded upper back with the head or shoulders leaning forward. Requires three seconds. Position the camera so the head, shoulders, and torso are visible; a close-up of the face is insufficient.
+- **Custom:** enter up to 1,000 characters describing a directly visible action or posture, for example “holding a book in front of my face.” Requires three seconds. Conditions requiring hidden information or an internal mental state are not suitable for image-only detection.
+
+For all conditions, probability must be at least 0.8 and visibility at least 0.7. Unclear views are held as unknown. Changing the condition ends the current session and discards its pending results; start a new session after saving.
+
+## Cumulative API usage
+
+The control screen shows completed request counts, successes, failures, and input/output/total tokens since collection began. Token totals use the API's reported `usage`, not estimates; responses without token usage are counted separately. Results received after a session is stopped still count toward usage.
+
+Counters persist across sessions and app restarts in `~/.config/pompom/usage.json` (mode `0600`). The file contains counters and a start timestamp, with no images, prompts, conditions, or API keys. These are local app totals from version 0.2.0 onward, not account-wide usage or billing amounts. A storage warning is displayed if totals cannot be persisted.
+
 ## How it behaves
 
-- After 10 seconds of visible, phone-free activity, PomPom performs the official `dance1` motion.
+- After 10 seconds of clear results where the selected condition is absent, PomPom performs the official `dance1` motion.
 - While dancing, the first returned phone-holding detection interrupts the dance and starts `fear1`.
 - Otherwise, phone-holding probability of at least 0.8 and visibility of at least 0.7 must persist for two seconds to trigger a reminder. There is no cooldown.
-- The preset emotion sound is followed by one of two randomly selected Japanese voice reminders.
-- Once visible hands are detected without the phone after holding it, PomPom celebrates once with `cheerful1`.
+- For Phone, the preset emotion sound is followed by one of two randomly selected Japanese voice reminders. Slouching and Custom keep the preset motion and sound, without playing the phone-specific recording.
+- Once the previously detected condition is clearly absent, PomPom celebrates once with `cheerful1`.
 - Pause, stop, settings changes, and timer expiry take effect locally; late inference results are discarded.
 - Uncertain results, communication failures, or a detection gap of 10 seconds reset the focus streak and stop the dance.
 - The timer and observation continue on the robot when the control page is closed, provided the app keeps running.

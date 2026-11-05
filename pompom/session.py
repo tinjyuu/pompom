@@ -1,4 +1,4 @@
-"""Local safety/timer state; phone-holding policy is provided by the on-robot Decisions adapter."""
+"""Local safety/timer state; condition policy is provided by the on-robot Decisions adapter."""
 
 import time
 import uuid
@@ -106,9 +106,16 @@ class Session:
             return None
         if from_frame:
             observable = snapshot["observable_probability"]
-            phone = snapshot["phone_probability"]
+            phone = snapshot.get(
+                "condition_probability", snapshot.get("phone_probability")
+            )
+            clear_reason = (
+                "phone_use_not_detected"
+                if self.settings.condition_preset == "phone"
+                else "condition_not_detected"
+            )
             if (
-                snapshot["reason"] == "phone_use_not_detected"
+                snapshot["reason"] == clear_reason
                 and observable is not None
                 and observable >= 0.7
                 and phone is not None
@@ -123,14 +130,20 @@ class Session:
             if observable is not None and observable >= 0.7 and phone is not None:
                 if phone >= 0.8:
                     self.phone_in_use = True
-                elif phone <= 0.2 and snapshot["reason"] == "phone_use_not_detected":
+                elif phone <= 0.2 and snapshot["reason"] == clear_reason:
                     self.phone_put_down = self.phone_in_use
                     self.phone_in_use = False
         nid = snapshot.get("notification_id")
         if from_frame and snapshot["notify"] and nid and nid not in self.seen:
             self.seen.add(nid)
             self.notification_count += 1
-            self.log("phone_detected", notification_id=nid)
+            self.log(
+                "phone_detected"
+                if self.settings.condition_preset == "phone"
+                else "condition_detected",
+                notification_id=nid,
+                condition_label=self.settings.public()["condition"]["label"],
+            )
             return nid
         return None
 

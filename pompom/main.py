@@ -5,8 +5,10 @@ import threading
 from reachy_mini import ReachyMini, ReachyMiniApp
 
 from .api import DirectApi
+from .config import SettingsStore
 from .hardware import ReachyHardware
 from .runtime import Runtime
+from .usage import UsageMeter
 from .web import attach_routes
 
 
@@ -24,7 +26,10 @@ class Pompom(ReachyMiniApp):
         hardware.prepare_camera()
         if stop_event.is_set():
             return
-        self.runtime = Runtime(hardware, DirectApi())
+        self.runtime = Runtime(
+            hardware,
+            DirectApi(usage=UsageMeter(SettingsStore().path.with_name("usage.json"))),
+        )
         self.runtime.run(stop_event)
 
 

@@ -168,13 +168,20 @@ class ReachyHardware:
         results = []
         if settings.motion_enabled and self.fear is not None:
             self._start_emotion(
-                self.fear, FEAR_MOVE, settings.audio_enabled, speech=True
+                self.fear,
+                FEAR_MOVE,
+                settings.audio_enabled,
+                speech=settings.condition_preset == "phone",
             )
             results.append({"action": FEAR_MOVE, "status": "started"})
         elif settings.motion_enabled:
             results.append({"action": FEAR_MOVE, "status": "unavailable"})
         # Fear keeps its original sound and queues the Japanese reminder after it.
-        if settings.audio_enabled and self.emotion is None:
+        if (
+            settings.audio_enabled
+            and self.emotion is None
+            and settings.condition_preset == "phone"
+        ):
             try:
                 self._play_reminder()
                 results.append({"action": "reminder", "status": "started"})
