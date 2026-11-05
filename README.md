@@ -1,6 +1,6 @@
 ---
 title: PomPom
-emoji: 🍅
+emoji: 🤖
 colorFrom: yellow
 colorTo: pink
 sdk: static
@@ -10,60 +10,65 @@ short_description: A dancing focus buddy for Reachy Mini Wireless
 tags:
   - reachy_mini
   - reachy_mini_python_app
+thumbnail: https://huggingface.co/spaces/tinjyuu/pompom/resolve/main/pompom/static/icon.png
 ---
 
-# PomPom 🍅
+<p align="center"><img src="https://huggingface.co/spaces/tinjyuu/pompom/resolve/main/pompom/static/icon.png" width="160" height="160" alt="PomPom mascot — a cheerful dancing robot"></p>
 
-集中が続くと踊り、スマホを持つと声をかける、Reachy Mini Wirelessの相棒です。
-本体からOpenAI Decisions APIへ直接接続します。共有APIやMacの常駐は不要です。
+**English | [日本語](README.ja.md)**
 
-## 使い方
+# PomPom
 
-1. Reachy Miniのダッシュボードから、このSpaceをアプリとしてインストールし、`pompom`を起動します。
-2. **http://reachy-mini.local:8043/**（または本体のIP:8043）を開きます。
-3. OpenAI APIキーを登録し、カメラ確認・通知テストを行います。
-4. 集中する時間（初期値25分）を保存し、画像送信への同意後に開始します。
+A little focus companion for Reachy Mini Wireless. PomPom dances when you stay off your phone, reminds you when you pick it up, and celebrates when you put it down.
 
-このSpaceは紹介・配布ページです。カメラやOpenAI APIキーをSpaceへ送る操作画面ではありません。
-APIキーは利用者自身のものを本体で入力してください。API利用料金とOpenAIの保持条件が適用されます。
+The app runs on the robot and connects directly to OpenAI Decisions API. No always-on Mac or shared backend is required. **The robot control screen and recorded voice reminders are currently in Japanese.**
 
-## 動作
+## Get started
 
-- 手元が見えてスマホを持っていない判定が10秒続くと、公式`dance1`で踊ります。
-- ダンス中に最初のスマホ保持判定が返ったら、ダンスを中断して公式`fear1`へ切り替えます。
-- 通常は保持確率0.8以上・可視性0.7以上が2秒続くと注意します。クールダウンはありません。
-- プリセット音声の後に、2種類の日本語の声かけからランダムに1つを再生します。
-- 手元が見えてスマホを置いたと判定したら、公式`cheerful1`で1回喜びます。
-- 一時停止・終了・設定変更・期限切れはローカルで先に処理し、遅延した判定を破棄します。
-- 判定不能・通信失敗・10秒以上の判定欠落でも集中の継続時間をリセットし、ダンスを止めます。
-- アプリが動作していれば、操作ページを閉じても本体のタイマーと観測は継続する構成です。
+1. Install [this Space](https://huggingface.co/spaces/tinjyuu/pompom) from your Reachy Mini dashboard, then launch `pompom`.
+2. Open **http://reachy-mini.local:8043/**, or use your robot's IP address with port `8043`.
+3. Enter your own OpenAI API key. Check the camera view and test a notification.
+4. Save your focus duration (25 minutes by default), consent to sending camera images, and start.
 
-判定は撮影・通信・推論の速度に依存します。実際にスマホを持ってから正確に2秒で反応する保証はありません。
-机に置いたスマホは対象外です。仕事でスマホを使う際は一時停止してください。
-集中力・意図・医学的な状態を診断するものではありません。
+The Space is an introduction and distribution page. Enter your API key on the robot's control screen. OpenAI API usage charges and data retention terms apply.
 
-## OpenAIへの直接接続
+## How it behaves
 
-送信先は`https://api.openai.com/v1/decisions`に固定し、モデルは`gpt-6-luna`を使用します。
-[公式Decisions APIガイド](https://developers.openai.com/api/docs/guides/decisions)に準拠します。
-Decisions APIの利用権限があるAPIキーが必要です。APIエラー時は画面に状態を表示します。
+- After 10 seconds of visible, phone-free activity, PomPom performs the official `dance1` motion.
+- While dancing, the first returned phone-holding detection interrupts the dance and starts `fear1`.
+- Otherwise, phone-holding probability of at least 0.8 and visibility of at least 0.7 must persist for two seconds to trigger a reminder. There is no cooldown.
+- The preset emotion sound is followed by one of two randomly selected Japanese voice reminders.
+- Once visible hands are detected without the phone after holding it, PomPom celebrates once with `cheerful1`.
+- Pause, stop, settings changes, and timer expiry take effect locally; late inference results are discarded.
+- Uncertain results, communication failures, or a detection gap of 10 seconds reset the focus streak and stop the dance.
+- The timer and observation continue on the robot when the control page is closed, provided the app keeps running.
 
-JPEGはメモリ内で長辺640px以下へ縮小し、1MiB以下に制限します。画像はこのアプリでは永続保存しません。
-同時判定は1件、次の撮影は最短1秒間隔です。レート制限時は30秒待機し、残高・認証・権限エラーは一時停止します。
-APIキーは`~/.config/pompom/settings.json`に0600で保存し、画面へのAPI応答やログに出しません。
-`OPENAI_API_KEY`環境変数は、まだ設定ファイルがないときの初期値としても利用できます。
+Response time depends on capture, network, and inference latency; two seconds is a detection threshold, not a response-time guarantee. A phone resting on a desk is excluded. Pause the session when you need your phone for work. PomPom does not diagnose concentration, intent, or medical conditions.
 
-## 既存アプリとの共存
+## Direct OpenAI connection and privacy
 
-共有API版[Reachy Focus](https://github.com/aieo-product/devdayHackathon261018)とは別のアプリです。
-`pompom`パッケージ・entry point、ポート8043、`~/.config/pompom/`を使用します。
-既存の`reachy_focus`（ポート8042・設定`~/.config/reachy-focus/`）を削除・上書きしません。
-本体のアプリ管理で、使いたいアプリを選んで起動してください。
+The app sends requests to `https://api.openai.com/v1/decisions` using `gpt-6-luna`, following the [Decisions API guide](https://developers.openai.com/api/docs/guides/decisions). Your API key must have access to this API and model. API errors appear on the control screen.
 
-## 開発・検証
+- Images are resized in memory to a maximum long edge of 640 pixels and a maximum JPEG size of 1 MiB. The app does not persist images.
+- Only one inference request runs at a time, with at least one second between captures. Rate limits trigger a 30-second wait; quota, authentication, and permission errors pause the session.
+- The API key is stored on the robot in `~/.config/pompom/settings.json` with mode `0600`. It is excluded from API responses to the control screen and from app logs.
+- `OPENAI_API_KEY` can provide the initial key when no settings file exists yet.
 
-ソースをGitでcloneする場合はGit LFSが必要です。音声素材は公開Hugging Face Spaceから取得します。
-Reachyのダッシュボードからのインストールは、SDKが音声素材も取得します。
+## If the control screen does not open
+
+The log line `ERROR - Using Python … environment at: /venvs/apps_venv` alone does not mean installation failed. Check the following lines for `Successfully installed` and `Job 'install' completed successfully`.
+
+Launch PomPom in the dashboard, then open the robot's address on **port 8043**. Being able to reach the dashboard on port 8000 does not guarantee that port 8043 is reachable through the same network route. If you use Tailscale, try the robot's Tailscale address with `:8043`. A successful `/api/status` response confirms app initialization; it does not verify live OpenAI inference.
+
+## Keep the original app
+
+PomPom is separate from the shared-API [Reachy Focus app](https://github.com/aieo-product/devdayHackathon261018). It uses its own `pompom` package and entry point, port `8043`, and `~/.config/pompom/` settings directory.
+
+It does not remove or overwrite `reachy_focus`, its port `8042`, or its `~/.config/reachy-focus/` settings. Choose which app to run in the robot's app manager.
+
+## Development and validation
+
+Git clones require Git LFS. Binary assets are served from the public Hugging Face Space. Installing through the Reachy dashboard uses the SDK to download these assets.
 
 ```sh
 python -m pip install -e '.[dev]'
@@ -74,9 +79,6 @@ python scripts/check-package.py
 reachy-mini-app-assistant check .
 ```
 
-LinuxではSDKのビルドにCairo・GObjectの開発ライブラリが必要です。CIのインストール手順を参照してください。
+On Linux, the SDK build requires Cairo and GObject development libraries; see the CI workflow for installation steps.
 
-共通API版の実装・実機で確認したモーション・音声素材を引き継いでいます。
-PomPomの直接接続、判定失敗、停止後の遅延応答、タイマー、音声ヘッダーは自動テストで確認します。
-本リリース時点で、PomPomからの有料OpenAI実要求と実画像認識、実機の長時間継続は未確認です。
-公開したSpaceと、Reachyの標準アプリ一覧への掲載は別です。
+PomPom inherits motions and voice assets tested on the original shared-API app. Automated tests cover the direct API client, inference failures, late replies after stopping, timers, and audio headers. At the initial release, paid live OpenAI requests, real-image classification through PomPom, and long-running hardware operation had not been verified. Publishing a Space does not automatically list it in the standard Reachy app catalog.

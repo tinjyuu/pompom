@@ -24,7 +24,7 @@ include = ["pompom", "pompom.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-pompom = ["static/*.html", "static/*.css", "static/*.js", "assets/*.wav"]
+pompom = ["static/*.html", "static/*.css", "static/*.js", "static/*.png", "assets/*.wav"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "build>=1", "ruff>=0.11"]

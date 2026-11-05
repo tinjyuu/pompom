@@ -1,4 +1,4 @@
-include README.md pyproject.toml index.html style.css
+include README.md README.ja.md pyproject.toml index.html style.css
 graft pompom
 prune tests
 prune scripts
