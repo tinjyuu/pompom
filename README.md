@@ -1,6 +1,6 @@
 ---
 title: PomPom
-emoji: 🤖
+emoji: 👀
 colorFrom: yellow
 colorTo: pink
 sdk: static
